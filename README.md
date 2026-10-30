@@ -33,3 +33,15 @@ npm start
 username: admin
 password: admin
 ```
+
+## Persistent target history on Render
+
+Target IDs, locations, and timestamps are stored in `DATA_FILE`. For persistence across
+restarts and deploys on Render, attach a persistent disk and set:
+
+```text
+DATA_FILE=/var/data/targets.json
+```
+
+Without a persistent disk, Render's local filesystem is temporary and saved targets can
+be lost when the service restarts or redeploys.

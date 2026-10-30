@@ -19,8 +19,9 @@
         <h1 class="title is-5">Targets</h1>
 
         {{ for(value, key in TARGETS) }}
-        <a href="/map?id={{ key }}" class="button is-fullwidth">
-            {{ key }}
+        <a data-target-id="{{ key }}" href="/map?id={{ key }}" class="button is-fullwidth is-flex is-flex-direction-column">
+            <strong>{{ key }}</strong>
+            <small>First clicked: <span class="first-seen">{{ value.firstSeen }}</span> | Last update: <span class="last-seen">{{ value.lastSeen }}</span></small>
         </a>
         {{/}}
     </section>
@@ -34,12 +35,25 @@
             transports: ['websocket']
         })
 
-        socket.on("user-connected", newId => {
+        socket.on("user-connected", target => {
             const a = document.createElement('a')
-            a.href = `/map?id=${newId}`
-            a.className = "button is-fullwidth"
-            a.innerText = newId
+            a.dataset.targetId = target.id
+            a.href = `/map?id=${target.id}`
+            a.className = "button is-fullwidth is-flex is-flex-direction-column"
+            a.innerHTML = `<strong>${target.id}</strong>
+                <small>First clicked: <span class="first-seen">${target.firstSeen}</span> |
+                Last update: <span class="last-seen">${target.lastSeen}</span></small>`
             content.appendChild(a)
+        })
+
+        socket.on("map-data", target => {
+            const link = document.querySelector(`[data-target-id="${target.id}"]`)
+            if (link == null) return
+
+            const firstSeen = link.querySelector(".first-seen")
+            const lastSeen = link.querySelector(".last-seen")
+            if (firstSeen != null) firstSeen.innerText = target.firstSeen
+            if (lastSeen != null) lastSeen.innerText = target.lastSeen
         })
     </script>
 </body>
