@@ -5,6 +5,7 @@ const config = require("./config")
 const express = require("express")
 const tarkine = require("tarkine")
 const http = require('http')
+const { connect, updateTarget } = require("./storage")
 
 const app = express()
 const server = http.createServer(app)
@@ -20,8 +21,16 @@ app.use(express.urlencoded({ extended: false }))
 app.use(express.static(__dirname + "/public"))
 app.use(express.json())
 
-app.use("/", require("./router"))
+async function start() {
+    const targets = await connect()
+    app.use("/", require("./router")(targets, updateTarget))
 
-server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`)
+    server.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`)
+    })
+}
+
+start().catch(error => {
+    console.error("Unable to start application:", error)
+    process.exitCode = 1
 })

